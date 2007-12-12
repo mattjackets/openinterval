@@ -1,0 +1,1 @@
+All camera support files are allowed use of registers 20-25, must have a 'shutterrelease' subroutine, and the 'ret' instruction as their final call.

@@ -2,8 +2,10 @@
 ; 
 ; Copyright (C) 2005, 2006 Michele Bighignoli - Laives (BZ) - ITALY # www.bigmike.it/ircontrol
 ;
-; Version 2.0.0 - 03/2006
-;
+; Version 2.0.0-OI - 12/2007
+; Modified by Matt Coates (mattjackets+openinterval at gmail.com)
+; for use as an include file for the OpenInterval project
+; (http://repo.or.cz/w/OpenInterval.git)
 ;
 ; This program is free software; you can redistribute it and/or modify
 ; it under the terms of the GNU General Public License as published by
@@ -52,29 +54,10 @@
 ; REPEAT ONE TIME
 ;
 
-.include "tn2313def.inc" ; ATTiny2313
-;.include "2313def.inc" ; AT90S2313
-
-
 .DEF DelayReg  = R23
 .DEF MainLoopC = R22
 .DEF Counter   = R21
 .DEF Counter2  = R20
-
-
-reset:
-	rjmp	startup
-	reti				; ext int 0 (not used)
-	reti				; ext int 1 (not used)
-	reti				; timer1 (not used)
-	reti				;
-	reti				;
-	reti				; timer0 (not used)
-	reti				; UART RRF Not Used
-	reti				; UART TRE Not Used	
-	reti				; UART TRDE Not Used 
-	reti				; analog comparator not used
-
 
 delay130:
 ; This is a 13.0 uS delay (104 cycles @ 8MHz)
@@ -102,22 +85,7 @@ delay130_loop:
 
 ; Code executed at startup
 
-startup:
-; stack is needed!
-; initialize the stack pointer
-;
-; ENABLE IF "SPH" EXISTS
-;	ldi	R16,HIGH(RAMEND)
-;	out	SPH,R16
-
-	ldi	R16,LOW(RAMEND)
-	out	SPL,R16
-
-; Set PortD = OUT
-	ldi	R16,0xFF
-	out	DDRD,R16
-
-
+shutterrelease:
 	ldi	MainLoopC,2		; Send a complete waveform 2 times
 
 mainloop:
@@ -125,9 +93,9 @@ mainloop:
 ; Send start pulse (2000 uS)
 	ldi	Counter,77		; (13 uS * 2 ) * 77 = 2002 uS
 startpulse:
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on		; Wait 13.0 uS
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 	rcall	delay130_led_off		; wait 13.0 uS
 	dec	Counter
 	brne	startpulse
@@ -152,9 +120,9 @@ startpause:
 ; Send first pulse (390 uS)
 	ldi	Counter,15
 pulse1:
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 	rcall	delay130_led_off
 	dec	Counter
 	brne	pulse1
@@ -184,16 +152,16 @@ pause1b:
 
 	ldi	Counter,15
 pulse2:
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 	rcall	delay130_led_off
 	dec	Counter
 	brne	pulse2
 
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 
 ; Pause (3580 uS + 7 uS from pulse2 = 3587 uS)
 	ldi	Counter,136
@@ -206,20 +174,20 @@ pause2:
 ; Send 3th pulse (400 uS) - (in real world = 403 uS)
 	ldi	Counter,15
 pulse3:
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 	rcall	delay130_led_off
 	dec	Counter
 	brne	pulse3
 
-	sbi	PORTD,0			; LED on
+	sbi	irport,irpin			; LED on
 	rcall	delay130_led_on
-	cbi	PORTD,0			; LED off
+	cbi	irport,irpin			; LED off
 
 	dec	MainLoopC
 ; No long pause before sleep
-	breq	ContinueToSleep
+	breq	returnfromshutterrelease
 
 
 ; Pause for 63200 uS
@@ -251,6 +219,5 @@ longpause3:
 	
 	rjmp	mainloop
 
-ContinueToSleep:
-	sleep
-	rjmp	ContinueToSleep
+returnfromshutterrelease:
+	ret
