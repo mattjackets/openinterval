@@ -1,1 +1,5 @@
-All camera support files are allowed use of registers 20-25, must have a 'shutterrelease' subroutine, and the 'ret' instruction as their final call.
+All camera support files:
+ * are allowed use of registers 20-25
+ * must have a 'shutterrelease' subroutine and the 'ret' instruction as their final instruction
+ * must use 'irport' to identify the port to which the IR LED is attached
+ * must use 'irpin' to identify the pin of 'irport' to which the IR LED is attached
