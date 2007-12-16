@@ -15,18 +15,19 @@
 ;   You should have received a copy of the GNU General Public License
 ;   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-.include "include/tn12def.inc"
+.include "include/tn13def.inc"
 .EQU buttonPin	= 1 ; button
 .EQU syncPin	= 3 ; sync LED port
 .EQU irPort	= PORTB; ir LED port
 .EQU irPin	= 4 ; ir LED pin
-.equ FREQ	= 0 ; start out with no interval
+.equ freq = 2;
 
-.def temp	= r16
+.def mode	= r16
 .def tcounter	= r17
 .def tcounter2	= r18
-.def mode	= r19
-.def DelayReg2	= r24
+.def Idelay	= r19
+.def Idelay2	= r20
+
 
 .cseg
 .org 0x0000
@@ -35,42 +36,44 @@ reset:
 	rjmp	init		; Reset handler
 	rjmp	INT0_hand	; INT0 handler
 	reti			; Pin change handler
-	rjmp	TIM0_OVF	; Timer0 overflow handler
+	rjmp	TIM0_OVF	; Timer overflow handler
 	reti            	; EEPROM Ready handler
 	reti			; Analog Comparator handler
+	reti            	; Timer/Counter Compare Match A handler
+	reti			; Timer/Counter Compare Match B handler
+	reti            	; Watchdog Time-out handler
+	reti			; ADC Conversion Complete handler
+
 
 ;camera include file goes here
 .include "cameras/Nikon_OML-L3.inc"
 
 init:
+	ldi	mode, low(ramend)
+	out	spl, mode
 ; enable sleep mode and INT0 on falling edge
-	ldi	temp, (1 << SE) | (1 << ISC01) & (0 << ISC00)
-	out	MCUCR, temp 
+	ldi	mode, (1 << SE) | (1 << ISC01)
+	out	MCUCR, mode 
 
 ; disable ACD
-	ldi	temp, (1 << ACD)
-	out	ACSR, temp
+	ldi	mode, (1 << ACD)
+	out	ACSR, mode
 
 ; enable timer0
-;	ldi	temp, 0
-;	out	TCNT0, temp
+	ldi	mode, 0
+	out	TCNT0, mode
 
 ; set timer prescaler 1024
-	ldi	temp, (1 << CS02) | (1 << CS00)
-	out	TCCR0, temp
+	ldi	mode, (1 << CS02) | (1 << CS00)
+	out	TCCR0B, mode
 
-; enable timer overflow
-	ldi	temp, (1 << TOIE0)
-	out	TIMSK, temp
+; reset timer
+	ldi	mode, 0
+	out	TCNT0, mode
 
 ; enable INT0 interrupt
-	ldi	temp, (1 << INT0)
-	out	GIMSK, temp
-
-	ldi	temp,0
-	ldi	DelayReg,FREQ 
-	ldi	tcounter,FREQ 
-	ldi	mode,0
+	ldi	mode, (1 << INT0)
+	out	GIMSK, mode
 
 ; Set portB input
 	sbi	PORTB,buttonPin ; set b4 config. to enable internal pull-up.
@@ -78,45 +81,59 @@ init:
 ; Set portB output
 	sbi	DDRB,irPin
 	sbi	DDRB,syncPin
+	sbi	DDRB,2 
 
 	sbi	irPort,irPin	; LED off
-	rcall	shutterrelease
+	ldi	tcounter,0
+	ldi	tcounter2,1
+	ldi	Idelay,0
+	ldi	Idelay2,1
+	ldi	mode,0
+
 	sei
+
+
+testloop:
+	sbi	irPort,syncPin
+	rcall	shutterrelease
+	cbi	irPort,syncPin
+;	rcall	longdelay
+;	rjmp	testloop
+	
 
 GoToSleep:
 	sleep
 	rjmp	GoToSleep
 
-TIM0_OVF:       ; -- handle timer0 overflow, trigger shutter
+TIM0_OVF:
+
+	cpi	mode,0
+	breq	ReturnFI
 	cpi	mode,1
-	breq	TIMING
-	sbi	portb,syncPin
-        cpi	tcounter2, 0
+	breq	Timing
+	cbi	irport,syncPin
+        cpi	tcounter, 0
+        brne	SKIP
+	cpi	tcounter2,0
 	brne	SKIP
-	cpi	tcounter,0
-	brne	SKIP
-	cbi	portb,syncPin
-	mov	tcounter, DelayReg
+	sbi	irport,syncPin
+	mov	tcounter, Idelay
+	mov	tcounter2, Idelay2
 	rcall	shutterrelease
-skip:
+SKIP:
         dec	tcounter
-	cpi	tcounter,0
-	breq	dectcounter2
-	reti
-DecTCounter2:
+	brne	ReturnFI
 	dec	tcounter2
         reti
 Timing:
-	inc	DelayReg
-	cpi	DelayReg,0
-	breq	INCDelayReg2
+	inc	Idelay
+	brne	ReturnFI
+	inc	Idelay2
 	reti
 
-INCDelayReg2:
-	inc	DelayReg2
+ReturnFI:
 	reti
-
-INT0_hand:
+LongDelay:
         ldi     Counter,255
 intpause:
         rcall   delay130
@@ -146,21 +163,24 @@ intpause:
         rcall   delay130
         dec     Counter
         brne    intpause
+	ret
 
+INT0_hand:
+	rcall	longdelay
+	brne    intpause
+	cpi	mode,2
+	breq	ReturnFI
 	cpi	mode,1
-	breq	setdelay
-
-; enable timer0
-        ldi	temp, 0
-        out	TCNT0, temp
-	cbi	portb,SyncPin
-	ldi	mode,1 ; timing mode
+	breq	setDelay
+	ldi	mode,1
+; enable timer overflow
+	ldi	tcounter, (1 << TOIE0)
+	out	TIMSK0, tcounter
+	sbi	irport,syncpin
 	reti
-	
-SetDelay:
-	sbi	portb,syncPin
-	mov	tcounter,DelayReg
-	mov	tcounter2,DelayReg2
-	ldi	mode,2 ; running mode
-
+setDelay:
+	cbi	irport,syncpin
+	ldi	mode,2
+	ldi	tcounter,0
+	ldi	tcounter2,0
 	reti

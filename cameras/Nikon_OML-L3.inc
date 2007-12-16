@@ -54,10 +54,10 @@
 ; REPEAT ONE TIME
 ;
 
-.DEF DelayReg  = R23
-.DEF MainLoopC = R22
-.DEF Counter   = R21
-.DEF Counter2  = R20
+.DEF DelayReg  = R24
+.DEF MainLoopC = R23
+.DEF Counter   = R22
+.DEF Counter2  = R21
 
 delay130:
 ; This is a 13.0 uS delay (104 cycles @ 8MHz)
@@ -76,10 +76,8 @@ delay130_led_on:
 delay130_led_off:
 	nop
 	nop
-	ldi	DelayReg,30		; 1 cycle
-delay130_loop:
-	dec 	DelayReg			; 1 cycle
-	brne	delay130_loop		; 2 cycle if jump to label, 1 if not
+	nop
+	nop
 	ret				; 4 cycles
 
 
