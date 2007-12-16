@@ -19,8 +19,7 @@
 .EQU buttonPin	= 1 ; button
 .EQU syncPin	= 3 ; sync LED port
 .EQU irPort	= PORTB; ir LED port
-.EQU irPin	= 4 ; ir LED pin
-.equ freq = 2;
+.EQU irPin	= 0 ; ir LED pin
 
 .def mode	= r16
 .def tcounter	= r17
@@ -59,13 +58,9 @@ init:
 	ldi	mode, (1 << ACD)
 	out	ACSR, mode
 
-; enable timer0
-	ldi	mode, 0
-	out	TCNT0, mode
-
 ; set timer prescaler 1024
-	ldi	mode, (1 << CS02) | (1 << CS00)
-	out	TCCR0B, mode
+;	ldi	mode, (1 << CS02) | (1 << CS00)
+;	out	TCCR0B, mode
 
 ; reset timer
 	ldi	mode, 0
@@ -132,6 +127,11 @@ Timing:
 	reti
 
 ReturnFI:
+	push	mode
+	in	mode,GIFR
+	cbr	mode,6
+	out	GIFR,mode ; clear interrupt flags
+	pop	mode
 	reti
 LongDelay:
         ldi     Counter,255
@@ -167,20 +167,41 @@ intpause:
 
 INT0_hand:
 	rcall	longdelay
-	brne    intpause
+	rcall	longdelay
+	rcall	longdelay
+	rcall	longdelay
+	rcall	longdelay
 	cpi	mode,2
-	breq	ReturnFI
+	breq	BackToSleep
 	cpi	mode,1
 	breq	setDelay
-	ldi	mode,1
+; reset timer0
+	ldi	mode, 0
+	out	TCNT0, mode
+
+; set timer prescaler 1024, turn on timer
+	ldi	mode, (1 << CS02) | (1 << CS00)
+	out	TCCR0B, mode
+
 ; enable timer overflow
-	ldi	tcounter, (1 << TOIE0)
-	out	TIMSK0, tcounter
+	ldi	mode, (1 << TOIE0)
+	out	TIMSK0, mode
+
+	ldi	mode,1 ; set timing mode
 	sbi	irport,syncpin
-	reti
+	rjmp	ReturnFI
 setDelay:
 	cbi	irport,syncpin
-	ldi	mode,2
+	ldi	mode,2 ; set running mode
 	ldi	tcounter,0
 	ldi	tcounter2,0
-	reti
+	rjmp	ReturnFI
+BackToSleep:
+	ldi	mode,0 
+	out	TCCR0B, mode ; turn off timer0
+	ldi	tcounter,0
+	ldi	tcounter2,1
+	ldi	Idelay,0
+	ldi	Idelay2,1
+	rjmp	ReturnFI
+
